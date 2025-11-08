@@ -31,16 +31,30 @@ export const NBA_BDL: Provider = {
   },
 
   async gamesByDate(dateISO) {
-    const j: any = await fetchJson(`${BASE}/games?start_date=${dateISO}&end_date=${dateISO}&per_page=100`);
-    const map = (g: any): Game => ({
-      extId: String(g.id),
-      league: 'NBA',
-      dateUTC: g.date,
-      status: (g.status || 'finished').toLowerCase(),
-      home: { id: String(g.home_team.id), name: g.home_team.full_name, short: g.home_team.abbreviation, score: g.home_team_score },
-      away: { id: String(g.visitor_team.id), name: g.visitor_team.full_name, short: g.visitor_team.abbreviation, score: g.visitor_team_score }
-    });
-    return j.data.map(map);
+    try {
+      const j: any = await fetchJson(`${BASE}/games?start_date=${dateISO}&end_date=${dateISO}&per_page=100`);
+      const map = (g: any): Game => ({
+        extId: String(g.id),
+        league: 'NBA',
+        dateUTC: g.date,
+        status: (g.status || 'finished').toLowerCase(),
+        home: { id: String(g.home_team.id), name: g.home_team.full_name, short: g.home_team.abbreviation, score: g.home_team_score },
+        away: { id: String(g.visitor_team.id), name: g.visitor_team.full_name, short: g.visitor_team.abbreviation, score: g.visitor_team_score }
+      });
+      return j.data.map(map);
+    } catch (err: any) {
+      // If balldontlie returns unauthorized or HTML, try ESPN scraper as fallback
+      const msg = String(err?.message || err || '');
+      console.error('NBA provider gamesByDate failed, attempting ESPN fallback', { dateISO, msg });
+      try {
+        const { espnNbAGamesByDate } = await import('@/lib/scrapers/espn');
+        const games = await espnNbAGamesByDate(dateISO);
+        if (games && games.length) return games;
+      } catch (e) {
+        console.error('ESPN fallback failed', e);
+      }
+      throw err;
+    }
   },
 
   async teamLastNGames(teamId, n) {
