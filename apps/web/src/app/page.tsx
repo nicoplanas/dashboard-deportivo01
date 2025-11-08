@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 export default function Home() {
   const [games, setGames] = useState<any[]>([]);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [league, setLeague] = useState<'nba' | 'thesportsdb'>('nba');
+  // sport selection: map UI sport -> provider key and sport string for provider
+  const [sport, setSport] = useState<'basketball' | 'soccer' | 'tennis' | 'american_football'>('basketball');
+  const sportToProvider: Record<string, { provider: string; sportParam?: string }> = {
+    basketball: { provider: 'nba', sportParam: 'Basketball' },
+    soccer: { provider: 'thesportsdb', sportParam: 'Soccer' },
+    tennis: { provider: 'thesportsdb', sportParam: 'Tennis' },
+    american_football: { provider: 'thesportsdb', sportParam: 'American Football' }
+  };
+  const providerKey = sportToProvider[sport].provider;
 
   // UI mode: 'games' shows games by date; 'search' shows search UI
   const [mode, setMode] = useState<'games' | 'search'>('games');
@@ -15,22 +23,47 @@ export default function Home() {
   const [results, setResults] = useState<any[] | null>(null);
   const [stats, setStats] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
+  // pagination for search results
+  const [searchPage, setSearchPage] = useState(1);
+  const SEARCH_PER_PAGE = 25;
+  // pagination for games list
+  const [gamesPage, setGamesPage] = useState(1);
+  const GAMES_PER_PAGE = 25;
 
   useEffect(() => {
     if (mode !== 'games') return;
-    fetch(`/api/games?league=${league}&date=${date}`)
+    const sportParam = encodeURIComponent(sportToProvider[sport].sportParam || '');
+    fetch(`/api/games?league=${providerKey}&date=${date}&sport=${sportParam}`)
       .then((r) => r.json())
-      .then(setGames)
-      .catch(console.error);
-  }, [date, league, mode]);
+      .then((j) => {
+        // Providers should return an array of games, but on error the API
+        // may return an object like { error: '...' }. Normalize here to
+        // always set an array to avoid runtime errors when rendering.
+        if (Array.isArray(j)) {
+          setGames(j);
+          setGamesPage(1);
+        } else if (j && Array.isArray((j as any).games)) {
+          setGames((j as any).games);
+          setGamesPage(1);
+        } else {
+          console.error('Unexpected /api/games response', j);
+          setGames([]);
+        }
+      })
+      .catch((e) => {
+        console.error('Failed fetching /api/games', e);
+        setGames([]);
+      });
+  }, [date, providerKey, mode]);
 
   async function doSearch() {
     setLoading(true);
     setResults(null);
     setStats(null);
+    setSearchPage(1);
     try {
       const res = await fetch(
-        `/api/search?league=${encodeURIComponent(league)}&type=${encodeURIComponent(searchType)}&q=${encodeURIComponent(
+        `/api/search?league=${encodeURIComponent(providerKey)}&type=${encodeURIComponent(searchType)}&q=${encodeURIComponent(
           searchQ
         )}`
       );
@@ -52,7 +85,7 @@ export default function Home() {
     setStats(null);
     try {
       const res = await fetch(
-        `/api/stats?league=${encodeURIComponent(league)}&type=${encodeURIComponent(searchType)}&id=${encodeURIComponent(
+        `/api/stats?league=${encodeURIComponent(providerKey)}&type=${encodeURIComponent(searchType)}&id=${encodeURIComponent(
           id
         )}`
       );
@@ -73,9 +106,11 @@ export default function Home() {
           <p className="subtitle">Resultados, búsquedas y estadísticas por liga, equipo o jugador.</p>
 
           <div className="controls">
-            <select value={league} onChange={(e) => setLeague(e.target.value as any)} className="select">
-              <option value="nba">NBA (Basket)</option>
-              <option value="thesportsdb">TheSportsDB (Multi)</option>
+            <select value={sport} onChange={(e) => setSport(e.target.value as any)} className="select">
+              <option value="basketball">Basketball</option>
+              <option value="soccer">Fútbol</option>
+              <option value="tennis">Tenis</option>
+              <option value="american_football">Fútbol Americano</option>
             </select>
 
             <select value={mode} onChange={(e) => setMode(e.target.value as any)} className="select">
@@ -112,16 +147,42 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {games.map((g) => (
-                    <tr key={g.extId} style={{borderTop:'1px solid rgba(255,255,255,0.03)'}}>
-                      <td style={{padding:12}}>{g.league}</td>
-                      <td style={{padding:12}}>{g.home.name}</td>
-                      <td style={{padding:12}}>{g.away.name}</td>
-                      <td style={{padding:12}}>{g.home.score ?? '-'} : {g.away.score ?? '-'}</td>
-                    </tr>
-                  ))}
+                  {(() => {
+                    const totalGames = games.length || 0;
+                    const totalGamesPages = Math.max(1, Math.ceil(totalGames / GAMES_PER_PAGE));
+                    const currentGamesPage = Math.min(Math.max(1, gamesPage), totalGamesPages);
+                    const start = (currentGamesPage - 1) * GAMES_PER_PAGE;
+                    const end = Math.min(start + GAMES_PER_PAGE, totalGames);
+                    const pageGames = (games || []).slice(start, end);
+                    return pageGames.map((g: any) => (
+                      <tr key={g.extId} style={{borderTop:'1px solid rgba(255,255,255,0.03)'}}>
+                        <td style={{padding:12}}>{g.league}</td>
+                        <td style={{padding:12}}>{g.home?.name}</td>
+                        <td style={{padding:12}}>{g.away?.name}</td>
+                        <td style={{padding:12}}>{g.home?.score ?? '-'} : {g.away?.score ?? '-'}</td>
+                      </tr>
+                    ));
+                  })()}
                 </tbody>
               </table>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:12}}>
+                <div style={{color:'var(--muted)'}}>
+                  {(() => {
+                    const total = games.length || 0;
+                    if (total === 0) return 'Mostrando 0 de 0';
+                    const totalPages = Math.max(1, Math.ceil(total / GAMES_PER_PAGE));
+                    const current = Math.min(Math.max(1, gamesPage), totalPages);
+                    const start = (current - 1) * GAMES_PER_PAGE + 1;
+                    const end = Math.min(current * GAMES_PER_PAGE, total);
+                    return `Mostrando ${start} - ${end} de ${total}`;
+                  })()}
+                </div>
+                <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                  <button className="btn" onClick={() => setGamesPage((p) => Math.max(1, p - 1))} disabled={gamesPage <= 1}>Anterior</button>
+                  <div style={{padding:'6px 10px',color:'var(--muted)'}}>Página {Math.max(1, gamesPage)} / {Math.max(1, Math.ceil((games.length || 0) / GAMES_PER_PAGE))}</div>
+                  <button className="btn" onClick={() => setGamesPage((p) => Math.min(Math.max(1, Math.ceil((games.length || 0) / GAMES_PER_PAGE)), p + 1))} disabled={gamesPage >= Math.max(1, Math.ceil((games.length || 0) / GAMES_PER_PAGE))}>Siguiente</button>
+                </div>
+              </div>
             </div>
           </>
         )}
@@ -144,17 +205,41 @@ export default function Home() {
               <div>
                 <h3>Resultados</h3>
                 <ul>
-                  {(results || []).map((r: any, idx: number) => (
-                    <li key={r.id ?? r.extId ?? idx} style={{display:'flex',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid rgba(255,255,255,0.03)'}}>
-                      <div>
-                        <div style={{fontWeight:700}}>{r.name || r.strTeam || r.strPlayer}</div>
-                        <div style={{color:'var(--muted)'}}>{r.team || r.short || r.abbreviation || ''}</div>
-                      </div>
-                      <div>
-                        <button onClick={() => loadStats(r)} className="select" style={{background:'transparent'}}>Ver stats</button>
-                      </div>
-                    </li>
-                  ))}
+                  {(() => {
+                    const total = (results || []).length;
+                    const totalPages = Math.max(1, Math.ceil(total / SEARCH_PER_PAGE));
+                    const current = Math.min(Math.max(1, searchPage), totalPages);
+                    const start = (current - 1) * SEARCH_PER_PAGE;
+                    const end = Math.min(start + SEARCH_PER_PAGE, total);
+                    const pageItems = (results || []).slice(start, end);
+                    return (
+                      <>
+                        {pageItems.map((r: any, idx: number) => (
+                          <li key={r.id ?? r.extId ?? idx} style={{display:'flex',justifyContent:'space-between',padding:'12px 0',borderBottom:'1px solid rgba(255,255,255,0.03)'}}>
+                            <div>
+                              <div style={{fontWeight:700}}>{r.name || r.strTeam || r.strPlayer}</div>
+                              <div style={{color:'var(--muted)'}}>{r.team || r.short || r.abbreviation || ''}</div>
+                            </div>
+                            <div>
+                              <button onClick={() => loadStats(r)} className="select" style={{background:'transparent'}}>Ver stats</button>
+                            </div>
+                          </li>
+                        ))}
+
+                        {/* pagination controls */}
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:12}}>
+                          <div style={{color:'var(--muted)'}}>
+                            Mostrando {total === 0 ? 0 : start + 1} - {end} de {total}
+                          </div>
+                          <div style={{display:'flex',gap:8,alignItems:'center'}}>
+                            <button className="btn" onClick={() => setSearchPage((p) => Math.max(1, p - 1))} disabled={current <= 1}>Anterior</button>
+                            <div style={{color:'var(--muted)'}}>Página {current} / {totalPages}</div>
+                            <button className="btn" onClick={() => setSearchPage((p) => Math.min(totalPages, p + 1))} disabled={current >= totalPages}>Siguiente</button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </ul>
               </div>
             )}

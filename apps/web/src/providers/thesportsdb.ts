@@ -49,6 +49,25 @@ export const THESPORTSDB: Provider = {
     const j: any = await fetchJson(`${BASE}/lookupplayer.php?id=${playerExtId}`);
     return j && j.players ? j.players[0] : null;
   }
+,
+
+  async gamesByDate(dateISO, sport) {
+    // TheSportsDB supports events by day: /eventsday.php?d=YYYY-MM-DD
+    // It returns events across sports; we filter by sport when provided.
+    const j: any = await fetchJson(`${BASE}/eventsday.php?d=${dateISO}`);
+    const events = j && j.events ? j.events : [];
+    const filtered = sport ? events.filter((e: any) => (e.strSport || '').toLowerCase() === sport.toLowerCase()) : events;
+    // Map to Game shape
+    const map = (ev: any) => ({
+      extId: ev.idEvent ? String(ev.idEvent) : `${dateISO}-${ev.strEvent}`,
+      league: ev.strLeague || ev.strSport || 'Unknown',
+      dateUTC: ev.dateEvent ? new Date(`${ev.dateEvent}T${ev.strTime || '00:00:00'}`).toISOString() : new Date(dateISO).toISOString(),
+      status: (ev.intHomeScore || ev.intAwayScore) ? 'finished' : 'scheduled',
+      home: { id: ev.idHomeTeam ? String(ev.idHomeTeam) : ev.strHomeTeam, name: ev.strHomeTeam, short: undefined, score: ev.intHomeScore ? Number(ev.intHomeScore) : undefined },
+      away: { id: ev.idAwayTeam ? String(ev.idAwayTeam) : ev.strAwayTeam, name: ev.strAwayTeam, short: undefined, score: ev.intAwayScore ? Number(ev.intAwayScore) : undefined }
+    });
+    return filtered.map(map);
+  }
 };
 
 export default THESPORTSDB;

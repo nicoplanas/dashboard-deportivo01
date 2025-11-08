@@ -13,7 +13,7 @@ export interface Provider {
   // search by player name
   searchPlayers?(q: string): Promise<{ id: string; name: string; team?: string }[]>;
   // get games for a date
-  gamesByDate?(dateISO: string): Promise<Game[]>;
+  gamesByDate?(dateISO: string, sport?: string): Promise<Game[]>;
   // last N games for a team
   teamLastNGames?(teamExtId: string, n: number): Promise<Game[]>;
   // basic team statistics or roster

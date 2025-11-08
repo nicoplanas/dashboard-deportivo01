@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   const league = (req.nextUrl.searchParams.get('league') || 'nba').toLowerCase();
   const date = req.nextUrl.searchParams.get('date') || new Date().toISOString().slice(0, 10);
   const provider = (providers as any)[league];
+  const sport = req.nextUrl.searchParams.get('sport') || undefined;
 
   if (!provider) {
     return NextResponse.json({ error: 'League not supported' }, { status: 400 });
@@ -16,7 +17,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const data = await cache(`games:${league}:${date}`, 300, async () => await provider.gamesByDate!(date));
+    const data = await cache(`games:${league}:${date}:${sport || 'all'}`, 300, async () => await provider.gamesByDate!(date, sport));
     return NextResponse.json(data, {
       headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=60' }
     });
