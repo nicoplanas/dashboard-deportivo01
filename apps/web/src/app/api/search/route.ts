@@ -12,14 +12,24 @@ export async function GET(req: NextRequest) {
 
   if (type === 'team') {
     if (!provider.searchTeams) return NextResponse.json({ error: 'searchTeams not supported by provider' }, { status: 400 });
-    const data = await cache(`search:teams:${league}:${q}`, 3600, () => provider.searchTeams!(q));
-    return NextResponse.json(data);
+    try {
+      const data = await cache(`search:teams:${league}:${q}`, 3600, async () => await provider.searchTeams!(q));
+      return NextResponse.json(data);
+    } catch (err: any) {
+      console.error('searchTeams error', { league, q, err: err?.message || err });
+      return NextResponse.json({ error: 'Failed to search teams', details: String(err?.message || err) }, { status: 502 });
+    }
   }
 
   if (type === 'player') {
     if (!provider.searchPlayers) return NextResponse.json({ error: 'searchPlayers not supported by provider' }, { status: 400 });
-    const data = await cache(`search:players:${league}:${q}`, 3600, () => provider.searchPlayers!(q));
-    return NextResponse.json(data);
+    try {
+      const data = await cache(`search:players:${league}:${q}`, 3600, async () => await provider.searchPlayers!(q));
+      return NextResponse.json(data);
+    } catch (err: any) {
+      console.error('searchPlayers error', { league, q, err: err?.message || err });
+      return NextResponse.json({ error: 'Failed to search players', details: String(err?.message || err) }, { status: 502 });
+    }
   }
 
   return NextResponse.json({ error: 'type must be team or player' }, { status: 400 });

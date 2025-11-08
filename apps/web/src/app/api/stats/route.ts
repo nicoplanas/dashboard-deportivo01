@@ -13,14 +13,24 @@ export async function GET(req: NextRequest) {
 
   if (type === 'team') {
     if (!provider.teamStats) return NextResponse.json({ error: 'teamStats not supported by provider' }, { status: 400 });
-    const data = await cache(`stats:team:${league}:${id}`, 600, () => provider.teamStats!(id));
-    return NextResponse.json(data);
+    try {
+      const data = await cache(`stats:team:${league}:${id}`, 600, async () => await provider.teamStats!(id));
+      return NextResponse.json(data);
+    } catch (err: any) {
+      console.error('teamStats error', { league, id, err: err?.message || err });
+      return NextResponse.json({ error: 'Failed to fetch team stats', details: String(err?.message || err) }, { status: 502 });
+    }
   }
 
   if (type === 'player') {
     if (!provider.playerStats) return NextResponse.json({ error: 'playerStats not supported by provider' }, { status: 400 });
-    const data = await cache(`stats:player:${league}:${id}`, 600, () => provider.playerStats!(id));
-    return NextResponse.json(data);
+    try {
+      const data = await cache(`stats:player:${league}:${id}`, 600, async () => await provider.playerStats!(id));
+      return NextResponse.json(data);
+    } catch (err: any) {
+      console.error('playerStats error', { league, id, err: err?.message || err });
+      return NextResponse.json({ error: 'Failed to fetch player stats', details: String(err?.message || err) }, { status: 502 });
+    }
   }
 
   return NextResponse.json({ error: 'type must be team or player' }, { status: 400 });

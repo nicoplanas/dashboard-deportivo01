@@ -11,9 +11,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'League not supported' }, { status: 400 });
   }
 
-  const data = await cache(`games:${league}:${date}`, 300, () => provider.gamesByDate(date));
+  if (!provider.gamesByDate) {
+    return NextResponse.json({ error: 'gamesByDate not supported by provider' }, { status: 400 });
+  }
 
-  return NextResponse.json(data, {
-    headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=60' }
-  });
+  try {
+    const data = await cache(`games:${league}:${date}`, 300, async () => await provider.gamesByDate!(date));
+    return NextResponse.json(data, {
+      headers: { 'Cache-Control': 's-maxage=300, stale-while-revalidate=60' }
+    });
+  } catch (err: any) {
+    // Log server-side for debugging
+    console.error('Error fetching gamesByDate', { league, date, err: err?.message || err });
+    return NextResponse.json({ error: 'Failed to fetch games', details: String(err?.message || err) }, { status: 502 });
+  }
 }
