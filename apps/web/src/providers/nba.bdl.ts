@@ -13,6 +13,16 @@ export const NBA_BDL: Provider = {
     }));
   },
 
+  async searchPlayers(q) {
+    const r = await fetch(`${BASE}/players?search=${encodeURIComponent(q)}&per_page=100`);
+    const j: any = await r.json();
+    return j.data.map((p: any) => ({
+      id: String(p.id),
+      name: `${p.first_name} ${p.last_name}`,
+      team: p.team ? p.team.full_name : undefined
+    }));
+  },
+
   async gamesByDate(dateISO) {
     const r = await fetch(`${BASE}/games?start_date=${dateISO}&end_date=${dateISO}&per_page=100`);
     const j: any = await r.json();
@@ -58,5 +68,15 @@ export const NBA_BDL: Provider = {
         score: g.visitor_team_score
       }
     }));
+  }
+,
+
+  async playerStats(playerId) {
+    // Try to fetch most recent season averages (use previous year as season param)
+    const season = new Date().getFullYear() - 1;
+    const r = await fetch(`${BASE}/season_averages?player_ids[]=${playerId}&season=${season}`);
+    const j: any = await r.json();
+    // balldontlie returns an array (may be empty)
+    return j.data && j.data.length ? j.data[0] : null;
   }
 };
