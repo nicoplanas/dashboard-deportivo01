@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: dashboard-deportivo
+    env: node
+    plan: free
+    rootDir: apps/web
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://xxxxx.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        value: your-anon-key
+      - key: SUPABASE_URL
+        value: https://xxxxx.supabase.co
+      - key: SUPABASE_SERVICE_ROLE
+        value: your-service-role
+      - key: REDIS_URL
+        value: redis://:password@redis-host:6379
